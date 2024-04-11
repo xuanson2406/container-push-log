@@ -3,18 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"io"
 	"log"
 	"os"
 	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 )
 
 func main() {
@@ -23,7 +18,7 @@ func main() {
 	accessKeyID := "VQNDG4HVO3GGV6P85YL2"
 	secretAccessKey := "uMhpUKfhC3SmhpN0tTJwLoE2YgjGcJ4yDaheVDvS"
 	useSSL := true
-	// bucketName := "824032ee-7014-42e1-a27b-d23bc20fd08f"
+	bucketName := "1c7896b7-15ea-424d-9bda-89624019ded5"
 	// Initialize minio client object.
 	minioClient, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
@@ -34,68 +29,9 @@ func main() {
 		log.Fatalln(err)
 	}
 	time.Sleep(5 * time.Second)
-	// Load in-cluster Kubernetes configuration
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// Create a new Kubernetes client using the provided config
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
-	pods, err := clientset.CoreV1().Pods("kube-system").List(context.TODO(), metav1.ListOptions{LabelSelector: "app=kube-bench"})
-	if err != nil {
-		panic(err.Error())
-	}
-	if pods != nil {
-		for _, pod := range pods.Items {
-			podLogOptions := &corev1.PodLogOptions{
-				Container: "kube-bench",
-			}
-			podLogs, err := clientset.CoreV1().Pods("kube-system").GetLogs(pod.Name, podLogOptions).Stream(context.TODO())
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error opening stream to pod logs: %v\n", err)
-				os.Exit(1)
-			}
-			defer podLogs.Close()
-
-			// Open a file to write the logs
-			file, err := os.Create("/var/log/kube-bench/benchmark-clusterid.log")
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error creating log file: %v\n", err)
-				os.Exit(1)
-			}
-			defer file.Close()
-
-			// Copy pod logs to the file
-			_, err = io.Copy(file, podLogs)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error writing pod logs to file: %v\n", err)
-				os.Exit(1)
-			}
-
-			fmt.Println("Logs written to file successfully.")
-		}
-	}
-	// var log_file string
-	// files, err := os.ReadDir("/var/log/containers")
-	// if err != nil {
-	// 	fmt.Println("Error reading directory:", err)
-	// 	return
-	// }
-
-	// // Print the list of files
-	// fmt.Println("Files in directory:")
-	// for _, file := range files {
-	// 	if strings.Contains(file.Name(), "kube-bench-node-fptcloud") && !strings.Contains(file.Name(), "container-pushlog") {
-	// 		fmt.Println(file.Name())
-	// 		log_file = file.Name()
-	// 	}
-	// }
-	// Open the file to be uploaded
-	file, err := os.Open("/var/log/kube-bench/benchmark-clusterid.log")
+	envValue := os.Getenv("CLUSTER_NAME")
+	fileName := envValue + ".log"
+	file, err := os.Open("/etc/kubernetes/audit-log/" + fileName)
 	if err != nil {
 		log.Fatalln("Can not open file: ", err)
 	}
@@ -116,9 +52,66 @@ func main() {
 	reader := bytes.NewReader(buffer)
 
 	// minioClient.IN
-	_, err = minioClient.PutObject(ctx, "1c7896b7-15ea-424d-9bda-89624019ded5", "file-test", reader, fileSize, minio.PutObjectOptions{})
+	_, err = minioClient.PutObject(ctx, bucketName, fileName, reader, fileSize, minio.PutObjectOptions{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Object uploaded successfully")
+	klog.Infof("Log file of cluster %s uploaded successfully", envValue)
+	// fileA := "/tmp/logA.log"
+	// fileB := "/tmp/logB.log"
+	// err = minioClient.FGetObject(ctx, bucketName, "fke-k8s-1l0kct8f.log", fileA, minio.GetObjectOptions{})
+	// if err != nil {
+	// 	fmt.Printf("get A")
+	// 	log.Fatal(err)
+	// }
+	// err = minioClient.FGetObject(ctx, bucketName, "fke-k8s-1l0kct8f-1.log", fileB, minio.GetObjectOptions{})
+	// if err != nil {
+	// 	fmt.Printf("get B")
+	// 	log.Fatal(err)
+	// }
+	// fileLogA, err := os.Open(fileA)
+	// if err != nil {
+	// 	log.Fatalln("Can not open file: ", err)
+	// }
+	// defer fileLogA.Close()
+	// fileLogB, err := os.Open(fileB)
+	// if err != nil {
+	// 	log.Fatalln("Can not open file: ", err)
+	// }
+	// defer fileLogB.Close()
+	// fileAinfo, err := fileLogA.Stat()
+	// if err != nil {
+	// 	fmt.Printf("file A")
+	// 	log.Fatalln(err)
+	// }
+	// fileBinfo, err := fileLogB.Stat()
+	// if err != nil {
+	// 	fmt.Printf("file B")
+	// 	log.Fatalln(err)
+	// }
+	// // // Đọc dữ liệu từ file vào một byte array
+	// fileSizeA := fileAinfo.Size()
+	// bufferA := make([]byte, fileSizeA)
+	// _, err = fileLogA.Read(bufferA)
+	// if err != nil {
+	// 	fmt.Printf("read A")
+	// 	log.Fatal(err)
+	// }
+	// fileSizeB := fileBinfo.Size()
+	// bufferB := make([]byte, fileSizeB)
+	// _, err = fileLogB.Read(bufferB)
+	// if err != nil {
+	// 	fmt.Printf("read B")
+	// 	log.Fatal(err)
+	// }
+	// buffer := make([]byte, fileSizeA+fileSizeB)
+	// buffer = append(bufferA, bufferB...)
+	// reader := bytes.NewReader(buffer)
+	// _, err = minioClient.PutObject(ctx, bucketName, "fileName-test", reader, fileSizeA+fileSizeB, minio.PutObjectOptions{})
+	// if err != nil {
+	// 	fmt.Printf("PUT")
+	// 	log.Fatal(err)
+	// }
+	// klog.Infof("Log file of cluster  uploaded successfully")
+	return
 }
