@@ -52,7 +52,8 @@ func main() {
 	reader := bytes.NewReader(buffer)
 
 	// minioClient.IN
-	_, err = minioClient.PutObject(ctx, bucketName, fileName, reader, fileSize, minio.PutObjectOptions{})
+	objectName := os.Getenv("OBJECT_NAME")
+	_, err = minioClient.PutObject(ctx, bucketName, objectName, reader, fileSize, minio.PutObjectOptions{})
 	if err != nil {
 		log.Fatal(err)
 	}
