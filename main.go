@@ -14,16 +14,20 @@ import (
 
 func main() {
 	ctx := context.Background()
-	endpoint := "s3-hfx03.fptcloud.com"
-	accessKeyID := "VQNDG4HVO3GGV6P85YL2"
-	secretAccessKey := "uMhpUKfhC3SmhpN0tTJwLoE2YgjGcJ4yDaheVDvS"
+	// endpoint := "s3-hfx03.fptcloud.com"
+	// accessKeyID := "VQNDG4HVO3GGV6P85YL2"
+	// secretAccessKey := "uMhpUKfhC3SmhpN0tTJwLoE2YgjGcJ4yDaheVDvS"
 	useSSL := true
-	bucketName := "1c7896b7-15ea-424d-9bda-89624019ded5"
+	// bucketName := "1c7896b7-15ea-424d-9bda-89624019ded5"
+	endpoint := os.Getenv("ENDPOINT")
+	accessKeyID := os.Getenv("ACCESS_KEY")
+	secretAccessKey := os.Getenv("SECRET_KEY")
+	bucketName := os.Getenv("BUCKET_NAME")
 	// Initialize minio client object.
 	minioClient, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
 		Secure: useSSL,
-		Region: "",
+		Region: "us-east-1",
 	})
 	if err != nil {
 		log.Fatalln(err)
@@ -53,6 +57,16 @@ func main() {
 
 	// minioClient.IN
 	objectName := os.Getenv("OBJECT_NAME")
+	existed, err := minioClient.BucketExists(ctx, bucketName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if !existed {
+		err = minioClient.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	_, err = minioClient.PutObject(ctx, bucketName, objectName, reader, fileSize, minio.PutObjectOptions{})
 	if err != nil {
 		log.Fatal(err)
